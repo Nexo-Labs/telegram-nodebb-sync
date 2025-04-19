@@ -88,8 +88,8 @@ export const syncTelegramToNodeBB = functions.region('europe-west1') // Ajustar 
             secrets = await getSecrets({ secretResourceNames: requiredSecretResourceNames });
 
             // Verificar que tenemos los tokens necesarios
-            const telegramToken = secrets[config.telegramBotTokenSecretName];
-            const nodebbToken = secrets[config.nodebbApiUserTokenSecretName]; // O el master token
+            const telegramToken = secrets[config.telegramBotTokenSecretName!];
+            const nodebbToken = secrets[config.nodebbApiUserTokenSecretName!]; // O el master token
             if (!telegramToken || !nodebbToken) {
                 throw new Error("No se pudieron obtener los tokens necesarios de Secret Manager.");
             }

@@ -19,11 +19,17 @@ export interface AppConfig {
     nodebbCategoryId: string | null;
     /** ID de usuario opcional en NodeBB (si se usa Master Token). */
     nodebbBotUid: string | null;
-    /** Nombre del secreto en Secret Manager para el token del bot de Telegram. */
-    telegramBotTokenSecretName: string;
-    /** Nombre del secreto en Secret Manager para el token de API de usuario de NodeBB. */
-    nodebbApiUserTokenSecretName: string;
-    /** Nombre del secreto en Secret Manager para el token de API maestro de NodeBB (opcional). */
+    /** Token del bot de Telegram (si se proporciona directamente). */
+    telegramBotToken: string | null;
+    /** Token de API de usuario de NodeBB (si se proporciona directamente). */
+    nodebbApiUserToken: string | null;
+    /** Token de API maestro de NodeBB (opcional, si se proporciona directamente). */
+    nodebbApiMasterToken: string | null;
+    /** Nombre del secreto en Secret Manager para el token del bot de Telegram (alternativa). */
+    telegramBotTokenSecretName: string | null;
+    /** Nombre del secreto en Secret Manager para el token de API de usuario de NodeBB (alternativa). */
+    nodebbApiUserTokenSecretName: string | null;
+    /** Nombre del secreto en Secret Manager para el token de API maestro de NodeBB (opcional, alternativa). */
     nodebbApiMasterTokenSecretName: string | null;
     /** Nivel de log deseado ('debug', 'info', 'warn', 'error'). */
     logLevel: 'debug' | 'info' | 'warn' | 'error';
@@ -89,9 +95,16 @@ export function getConfig(): AppConfig {
         nodebbUrl: getEnvVar('NODEBB_URL'), // Obligatorio
         nodebbCategoryId: getEnvVar('NODEBB_CATEGORY_ID'), // Obligatorio
         nodebbBotUid: process.env.NODEBB_BOT_UID || null,
-        telegramBotTokenSecretName: getEnvVar('TELEGRAM_BOT_TOKEN_SECRET_NAME', 'TELEGRAM_BOT_TOKEN'),
-        nodebbApiUserTokenSecretName: getEnvVar('NODEBB_API_USER_TOKEN_SECRET_NAME', 'NODEBB_API_USER_TOKEN'),
+
+        // Prioritize direct env vars for secrets, fall back to secret names for GCP
+        telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || null,
+        nodebbApiUserToken: process.env.NODEBB_API_USER_TOKEN || null, // Renamed from NODEBB_API_KEY for consistency
+        nodebbApiMasterToken: process.env.NODEBB_API_MASTER_TOKEN || null,
+
+        telegramBotTokenSecretName: process.env.TELEGRAM_BOT_TOKEN_SECRET_NAME || null,
+        nodebbApiUserTokenSecretName: process.env.NODEBB_API_USER_TOKEN_SECRET_NAME || null,
         nodebbApiMasterTokenSecretName: process.env.NODEBB_API_MASTER_TOKEN_SECRET_NAME || null,
+
         logLevel: ['debug', 'info', 'warn', 'error'].includes(logLevel) ? logLevel as AppConfig['logLevel'] : 'info',
         firestoreCollection: getEnvVar('FIRESTORE_COLLECTION', 'processedTelegramMessages'),
         scheduleTimezone: getEnvVar('SCHEDULE_TIMEZONE', 'UTC'),
@@ -106,34 +119,67 @@ export function getConfig(): AppConfig {
  */
 export async function getSecrets(input: GetSecretsInput): Promise<Secrets> {
     const { secretResourceNames } = input;
-    const config = getConfig();
+    const config = getConfig(); // config now potentially holds direct tokens
     const secrets: Secrets = {};
 
-    // Filtrar nombres nulos o indefinidos
-    const validSecretNames = secretResourceNames.filter((name): name is string => !!name);
+    // --- Incorporate Direct Tokens if available ---
+    // If direct tokens were provided via env vars, use them immediately
+    if (config.telegramBotToken) {
+        secrets['TELEGRAM_BOT_TOKEN'] = config.telegramBotToken; // Use the actual token value
+    }
+    if (config.nodebbApiUserToken) {
+        secrets['NODEBB_API_USER_TOKEN'] = config.nodebbApiUserToken;
+    }
+    if (config.nodebbApiMasterToken) {
+        secrets['NODEBB_API_MASTER_TOKEN'] = config.nodebbApiMasterToken;
+    }
 
-    // --- Mocking Logic ---
-    if (!config.isProduction || !config.gcpProjectId) {
-        functions.logger.warn('Funcionando en modo local/desarrollo o sin GCP_PROJECT_ID. Usando MOCK secrets.');
-        validSecretNames.forEach(fullName => {
+    // --- Filter secret names for GCP fetching ---
+    // Only attempt to fetch secrets from GCP if the corresponding direct token wasn't already provided
+    const secretsToFetchNames = secretResourceNames.filter((name): name is string => {
+        if (!name) return false;
+        const parts = name.split('/');
+        const shortName = parts.length >= 4 ? parts[parts.length - 2] : null;
+        if (!shortName) return false;
+
+        // Don't fetch if the direct token was already found
+        if (shortName === 'TELEGRAM_BOT_TOKEN' && config.telegramBotToken) return false;
+        if (shortName === 'NODEBB_API_USER_TOKEN' && config.nodebbApiUserToken) return false;
+        if (shortName === 'NODEBB_API_MASTER_TOKEN' && config.nodebbApiMasterToken) return false;
+
+        return true; // Fetch this secret name from GCP
+    });
+
+    // --- Mocking Logic (Only for secrets NOT provided directly) ---
+    if ((!config.isProduction || !config.gcpProjectId) && secretsToFetchNames.length > 0) {
+        functions.logger.warn('Modo local/desarrollo o sin GCP_PROJECT_ID. Usando MOCK secrets para los no proporcionados directamente.');
+        secretsToFetchNames.forEach(fullName => {
             const parts = fullName.split('/');
-            // Asegurarse de que el formato es correcto (projects/id/secrets/NAME/versions/latest)
             const shortName = parts.length >= 4 ? parts[parts.length - 2] : fullName;
             if (!shortName) {
-                functions.logger.error(`Nombre de secreto inválido o mal formateado: ${fullName}`);
+                functions.logger.error(`Nombre de secreto inválido: ${fullName}`);
                 return;
             }
-            secrets[shortName] = `MOCK_${shortName}_VALUE`;
+            // Only add mock if not already present from direct env var
+            if (!secrets[shortName]) {
+                secrets[shortName] = `MOCK_${shortName}_VALUE`;
+            }
         });
+        // Return combined direct secrets and mocks
         return secrets;
     }
 
-    // --- Real Secret Manager Logic ---
+    // --- Real Secret Manager Logic (Only for secrets NOT provided directly) ---
+    if (secretsToFetchNames.length === 0) {
+         functions.logger.info('Todos los secretos necesarios fueron proporcionados via ENV. No se necesita llamar a Secret Manager.');
+        return secrets; // Return secrets obtained directly or previously fetched
+    }
+
     if (!secretManagerClient) {
         secretManagerClient = new SecretManagerServiceClient();
     }
 
-    const promises = validSecretNames.map(async (fullName) => {
+    const promises = secretsToFetchNames.map(async (fullName) => {
         const parts = fullName.split('/');
         const shortName = parts.length >= 4 ? parts[parts.length-2] : null;
 
@@ -174,7 +220,7 @@ export async function getSecrets(input: GetSecretsInput): Promise<Secrets> {
     });
 
     // Verificar si obtuvimos todos los secretos esperados (opcional pero recomendado)
-    if (validSecretNames.length !== Object.keys(secrets).length && config.isProduction) {
+    if (secretsToFetchNames.length !== Object.keys(secrets).length && config.isProduction) {
          functions.logger.error('No se pudieron obtener todos los secretos requeridos.');
          // Podríamos lanzar un error aquí dependiendo de la criticidad
          // throw new Error('Fallo al obtener uno o más secretos.');

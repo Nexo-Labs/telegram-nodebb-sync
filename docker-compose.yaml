@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  telegram-sync:
+    # Construye la imagen usando el Dockerfile en el directorio actual (.)
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Nombre de la imagen resultante (opcional, pero útil)
+    image: telegram-nodebb-sync:local
+    # Carga las variables de entorno desde el archivo .env.local
+    # Asegúrate de que .env.local exista en la misma carpeta que docker-compose.yaml
+    env_file:
+      - .env.local
+    # Comando por defecto que se ejecutará al iniciar el contenedor.
+    # Como no es un servidor, sino un script, podemos dejarlo vacío
+    # o especificar un comando que no haga nada (como 'tail -f /dev/null')
+    # si quisiéramos mantener el contenedor corriendo.
+    # Para ejecutar la función, usaremos 'docker-compose run telegram-sync'.
+    command: ["tail", "-f", "/dev/null"] # Mantiene el contenedor corriendo para 'exec'
+    # Opcional: Si necesitas acceder a Firestore (real o emulador)
+    # Asegúrate de configurar las credenciales o el endpoint del emulador
+    # environment:
+    #   - FIRESTORE_EMULATOR_HOST=firestore:8080 # Ejemplo si usas emulador en otro servicio
+    #   - GOOGLE_APPLICATION_CREDENTIALS=/path/inside/container/to/keyfile.json # Si conectas a GCP real 
