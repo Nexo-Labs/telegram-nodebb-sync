@@ -7,7 +7,7 @@ const { SecretManagerServiceClient } = require("@google-cloud/secret-manager");
 // TODO: Replace with your Google Cloud Project ID
 const GCP_PROJECT_ID = process.env.GCLOUD_PROJECT;
 // TODO: Replace with the names of your secrets in Google Secret Manager
-const TELEGRAM_BOT_TOKEN_SECRET_NAME = "projects/" + GCP_PROJECT_ID + "/secrets/TELEGRAM_BOT_TOKEN/versions/latest";
+const NODEBB_SYNCER_TL_BOT_SECRET_TOKEN = "projects/" + GCP_PROJECT_ID + "/secrets/TELEGRAM_BOT_TOKEN/versions/latest";
 const NODEBB_API_TOKEN_SECRET_NAME = "projects/" + GCP_PROJECT_ID + "/secrets/NODEBB_API_TOKEN/versions/latest";
 const NODEBB_API_USER_TOKEN_SECRET_NAME = "projects/" + GCP_PROJECT_ID + "/secrets/NODEBB_API_USER_TOKEN/versions/latest"; // Use this if using User Token
 // TODO: Replace with your NodeBB Forum URL (e.g., https://yourforum.com)
