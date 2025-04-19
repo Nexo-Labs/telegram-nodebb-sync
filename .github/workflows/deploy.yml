@@ -1,0 +1,66 @@
+# Workflow de GitHub Actions para Desplegar la Cloud Function a Firebase
+# Trigger: Creación de etiquetas que empiezan con 'v' (ej: v1.0.0)
+
+name: Deploy Firebase Function on Tag
+
+on:
+  push:
+    tags:
+      - 'v*' # Se activa con etiquetas como v1.0, v2.3.4, etc.
+
+jobs:
+  deploy_function:
+    name: Deploy syncTelegramToNodeBB Function
+    runs-on: ubuntu-latest # Usar el runner estándar de Ubuntu
+    # Permisos necesarios para autenticarse con GCP vía OIDC (recomendado)
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4 # Acción para descargar el código del repo
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4 # Acción para configurar Node.js
+        with:
+          node-version: '18' # Usar la versión especificada en package.json
+          cache: 'npm' # Habilitar caché para dependencias npm
+          cache-dependency-path: functions/package-lock.json # Ruta al lockfile para invalidar caché
+
+      - name: Install Firebase CLI
+        # Instalar globalmente en el runner para este job
+        run: npm install -g firebase-tools
+
+      - name: Install Function Dependencies
+        # Ejecutar npm ci (clean install) en el directorio /functions
+        run: cd functions && npm ci
+
+      - name: Authenticate to Google Cloud
+        # Usar la acción oficial de Google para autenticar usando Workload Identity Federation (OIDC)
+        # Es más seguro que usar claves de servicio directamente si tu repo es público
+        # o si quieres evitar gestionar claves JSON.
+        # Necesitas configurar Workload Identity Federation en GCP previamente.
+        uses: 'google-github-actions/auth@v2'
+        with:
+          workload_identity_provider: 'projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ secrets.GCP_WIF_POOL_ID }}/providers/${{ secrets.GCP_WIF_PROVIDER_ID }}' # Reemplazar con tus IDs de WIF
+          service_account: '${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}' # Email de la cuenta de servicio para despliegue
+
+      # --- Alternativa: Autenticación con Clave de Servicio (menos recomendada pero más simple si no tienes WIF) ---
+      # - name: Authenticate to Google Cloud (Service Account Key)
+      #   uses: 'google-github-actions/auth@v2'
+      #   with:
+      #     credentials_json: '${{ secrets.GCP_SA_KEY }}'
+      # --------------------------------------------------------------------------------------------------------
+
+      - name: Deploy to Firebase Functions
+        # Ejecuta el despliegue usando Firebase CLI
+        # El hook 'predeploy' en firebase.json se encargará de ejecutar 'npm run build'
+        # Pasa el ID del proyecto como argumento para asegurar que se usa el correcto.
+        run: firebase deploy --only functions:syncTelegramToNodeBB --project ${{ secrets.GCP_PROJECT_ID }} --force
+        # Nota: --force puede ser necesario si hay cambios en la configuración del schedule o triggers
+        # Considera quitar --force si prefieres confirmación manual en ciertos casos.
+
+      # Opcional: Logout de Firebase si es necesario (generalmente no lo es en CI)
+      # - name: Firebase Logout
+      #   run: firebase logout 

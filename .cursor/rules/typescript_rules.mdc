@@ -1,0 +1,132 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+---
+description: Directrices de codificación TypeScript y Funcional para el proyecto Telegram -> NodeBB Sync
+---
+# Directrices de Codificación: TypeScript Funcional
+
+**Versión:** 1.0
+**Fecha:** 2025-04-19
+
+## 1. Introducción
+
+Este documento establece las convenciones de codificación, principios y mejores prácticas que se seguirán en el desarrollo del bot de sincronización Telegram -> NodeBB. El objetivo es producir un código **robusto, mantenible, legible y testeable** adhiriéndose a los paradigmas de **TypeScript** y la **Programación Funcional (PF)**.
+
+## 2. Principios Fundamentales
+
+1.  **Lenguaje:** **TypeScript** será el lenguaje principal. Se utilizarán sus características de tipado estático para mejorar la detección temprana de errores y la auto-documentación.
+2.  **Paradigma Funcional:** Se favorecerá un estilo de programación funcional:
+    *   **Inmutabilidad:** Los datos no se modificarán directamente. Se crearán nuevas estructuras de datos en lugar de mutar las existentes. (Ej: Usar `map`, `filter`, `reduce`, spread operator `{...obj}` en lugar de `push`, asignaciones directas a propiedades de objetos existentes).
+    *   **Funciones Puras:** Siempre que sea posible, las funciones deben ser puras: para la misma entrada, siempre producen la misma salida y no tienen efectos secundarios observables.
+    *   **Manejo de Efectos Secundarios:** Las funciones que interactúan con el mundo exterior (APIs, bases de datos, sistema de archivos, logging, I/O) son inherentemente impuras. Estas deben:
+        *   Estar claramente identificadas.
+        *   Ser aisladas en módulos específicos (ej: `telegramApi.ts`, `firestoreService.ts`).
+        *   Minimizar su alcance y complejidad.
+        *   Manejar explícitamente los posibles errores (ver sección de Errores).
+    *   **Composición:** Construir funcionalidades complejas componiendo funciones más pequeñas y reutilizables.
+3.  **Claridad y Legibilidad:** El código debe ser fácil de entender. Nombres descriptivos para variables, funciones, tipos e interfaces son cruciales.
+
+## 3. Convenciones de TypeScript
+
+1.  **Tipado Estricto:** Aprovechar al máximo el sistema de tipos de TypeScript.
+    *   **`strict: true`:** Habilitado en `tsconfig.json`.
+    *   **Evitar `any`:** Su uso está **desaconsejado**. Utilizar tipos específicos, `unknown` (con type guards), o genéricos.
+    *   **Tipos vs. Interfaces:** Usar `interface` para definir la forma de objetos públicos o estructuras que puedan ser extendidas. Usar `type` para tipos primitivos, uniones, intersecciones, tuplas, o tipos de funciones.
+    *   **Tipado Explícito:** Añadir tipos explícitos para parámetros de función y tipos de retorno, incluso si TypeScript puede inferirlos, para mayor claridad y prevención de errores en refactorizaciones.
+2.  **Firma de Funciones Unificada:**
+    *   **Parámetro Único:** Todas las funciones exportadas recibirán **un único parámetro de entrada**, que será siempre un **objeto**.
+        ```typescript
+        interface MiFuncionInput {
+          param1: string;
+          param2: number;
+        }
+        interface MiFuncionOutput {
+          resultado: boolean;
+        }
+        // Función síncrona
+        function miFuncion(input: MiFuncionInput): MiFuncionOutput { /* ... */ }
+
+        // Función asíncrona
+        async function miFuncionAsync(input: MiFuncionInput): Promise<MiFuncionOutput> { /* ... */ }
+        ```
+    *   **Desestructuración:** Usar desestructuración dentro de la función para acceder a las propiedades del objeto de entrada.
+    *   **Tipo de Retorno Explícito:** Siempre definir explícitamente el tipo de retorno (`: TipoRetorno` o `: Promise<TipoRetorno>`).
+3.  **Genéricos (`<T>`)**
+    *   Utilizar genéricos para crear funciones, tipos e interfaces reutilizables y fuertemente tipadas cuando se trabaja con diferentes tipos de datos pero con una estructura o lógica común.
+4.  **Módulos ES:** Usar `import` y `export` de ES Modules. TypeScript compilará a CommonJS (`require`/`module.exports`) según `tsconfig.json` para compatibilidad con Node.js/Firebase Functions.
+5.  **Async/Await:** Utilizar `async/await` para manejar promesas de forma legible y síncrona en apariencia.
+
+## 4. Programación Funcional Aplicada
+
+1.  **Inmutabilidad:**
+    *   Preferir `const` sobre `let`.
+    *   No reasignar parámetros de función.
+    *   Para arrays: usar `map`, `filter`, `reduce`, `concat`, spread `[...arr]` en lugar de `push`, `pop`, `splice`, etc.
+    *   Para objetos: usar spread `{...obj, nuevaProp: valor}` en lugar de `obj.prop = valor`.
+2.  **Manejo de Errores:**
+    *   Evitar devolver `null` o `undefined` para indicar errores cuando sea posible. Considerar:
+        *   **Lanzar Errores Específicos:** Para errores excepcionales o irrecuperables. Usar clases de error personalizadas si es necesario (`class NetworkError extends Error {}`).
+        *   **Tipo Resultado (Opcional Avanzado):** Para funciones que pueden fallar de forma predecible, considerar devolver un tipo unión discriminada (ej: `type Result<T, E> = { success: true; value: T } | { success: false; error: E }`). Esto hace explícito el manejo de errores en el código que llama.
+    *   Usar bloques `try...catch` principalmente en los límites de los efectos secundarios (llamadas a API/DB) o en el orquestador principal.
+3.  **Evitar Bucles Imperativos:** Preferir métodos funcionales de arrays (`map`, `filter`, `reduce`, `forEach`, `find`, `some`, `every`) sobre bucles `for` o `while` tradicionales cuando mejore la legibilidad y se trabaje con transformaciones o búsquedas en colecciones.
+
+## 5. Estructura y Organización
+
+1.  **Modularidad:** Separar el código en módulos cohesivos basados en la funcionalidad (como se definió en el plan: `config.ts`, `telegramApi.ts`, `nodebbApi.ts`, `firestoreService.ts`, `messageParser.ts`, `index.ts`).
+2.  **Directorio `src`:** Todo el código fuente TypeScript residirá en `functions/src/`.
+3.  **Directorio `lib`:** El código JavaScript compilado se generará en `functions/lib/` (configurado en `tsconfig.json`). Este directorio debe estar en `.gitignore`.
+4.  **Tipos Compartidos (Opcional):** Si hay muchas interfaces/tipos compartidos entre módulos, se puede crear un directorio `functions/src/types/`.
+
+## 6. Documentación
+
+*   **JSDoc:** Todas las funciones exportadas, interfaces, tipos y miembros de clase complejos deben tener comentarios JSDoc explicando su propósito, parámetros (`@param {InputType} input - Descripción`) y valor de retorno (`@returns {OutputType | Promise<OutputType>} Descripción`).
+
+## 7. Ejemplo Conceptual
+
+```typescript
+// types/miTipo.ts
+export interface SumarInput {
+  /** El primer sumando */
+  a: number;
+  /** El segundo sumando */
+  b: number;
+}
+
+export interface SumarOutput {
+  /** El resultado de la suma */
+  suma: number;
+}
+
+// services/calculadora.ts
+import { SumarInput, SumarOutput } from '../types/miTipo';
+
+/**
+ * Calcula la suma de dos números.
+ * @param {SumarInput} input Objeto con los sumandos a y b.
+ * @returns {SumarOutput} Objeto con el resultado de la suma.
+ */
+export function sumar(input: SumarInput): SumarOutput {
+  const { a, b } = input; // Desestructuración
+  // Función pura, inmutable
+  return {
+    suma: a + b,
+  };
+}
+```
+
+## 8. Proceso de Refactorización
+
+1.  Renombrar archivos `.js` a `.ts` y moverlos a `src/`.
+2.  Actualizar `require` a `import` y `module.exports` a `export`.
+3.  Compilar (`tsc` o `npm run build`) y corregir errores iniciales de tipo y sintaxis.
+4.  Refactorizar módulo por módulo:
+    *   Añadir tipos explícitos a parámetros y retornos.
+    *   Definir interfaces/tipos para estructuras de datos.
+    *   Adaptar funciones a la firma de parámetro único.
+    *   Aplicar principios de inmutabilidad y funciones puras donde sea posible.
+    *   Añadir JSDoc.
+
+--- 

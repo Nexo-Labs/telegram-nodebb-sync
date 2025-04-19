@@ -1,0 +1,62 @@
+{
+  "name": "Node.js Firebase Functions",
+  // Usa una imagen oficial de Node.js (v18 como se especifica en package.json)
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:18",
+
+  // Características adicionales útiles
+  "features": {
+    // Incluye Firebase CLI
+    "ghcr.io/devcontainers/features/firebase:1": {},
+    // Incluye Docker (útil para emuladores a veces, aunque no estrictamente necesario aquí)
+    // "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    // Incluye Google Cloud CLI
+    "ghcr.io/devcontainers/features/google-cloud-cli:1": {}
+  },
+
+  // Ejecutar comandos después de crear el contenedor (instalar dependencias)
+  // Ejecuta npm install en la carpeta /functions del workspace
+  "postCreateCommand": "cd functions && npm install",
+
+  // Montar la carpeta local en el contenedor
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
+
+  // Reenviar puertos si se usan emuladores locales
+  // Descomentar y ajustar según los puertos que usen los emuladores
+  // "forwardPorts": [
+  //   9099, // Firestore Emulator UI
+  //   5001, // Functions Emulator HTTPS
+  //   8080, // Firestore Emulator gRPC
+  //   9199, // Auth Emulator UI (si se usa)
+  //   4000  // Pub/Sub Emulator (si se usa)
+  // ],
+
+  // Configura VS Code dentro del contenedor
+  "customizations": {
+    "vscode": {
+      // Extensiones recomendadas para desarrollo TS/Firebase
+      "extensions": [
+        "dbaeumer.vscode-eslint", // Linter
+        "esbenp.prettier-vscode", // Formateador
+        "googlecloudtools.cloudcode", // Herramientas GCP/Firebase
+        "ms-vscode.vscode-typescript-next" // Para usar la última versión de TS si es necesario
+      ],
+      // Configuraciones de VS Code para el workspace dentro del contenedor
+      "settings": {
+        "terminal.integrated.shell.linux": "/bin/zsh", // O /bin/bash si prefieres
+        "editor.formatOnSave": true,
+        "eslint.validate": ["javascript", "typescript"],
+        "[typescript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode",
+          "editor.formatOnSave": true
+        },
+        "[javascript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode",
+          "editor.formatOnSave": true
+        }
+      }
+    }
+  },
+  // Ejecutar como usuario no root por seguridad
+  "remoteUser": "node"
+} 
