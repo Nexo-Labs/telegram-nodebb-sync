@@ -8,9 +8,25 @@ import { parseMessage, ParsedMessageOutput } from "./messageParser";
 
 // --- Inicialización --- 
 
+console.log('[index.ts] Iniciando inicialización de Firebase Admin...');
+console.log(`[index.ts] Valor de FIRESTORE_EMULATOR_HOST: ${process.env.FIRESTORE_EMULATOR_HOST}`);
+
 // Inicializar Firebase Admin SDK (solo una vez)
 try {
-    admin.initializeApp();
+    // Comprobar si estamos usando el emulador de Firestore
+    if (process.env.FIRESTORE_EMULATOR_HOST) {
+        // Si usamos el emulador, inicializar con un projectId dummy
+        // El SDK usará FIRESTORE_EMULATOR_HOST automáticamente
+        console.log('[index.ts] Detectado FIRESTORE_EMULATOR_HOST, llamando a initializeApp({ projectId: \'local-project\' })...');
+        admin.initializeApp({ projectId: 'local-project' }); // Puedes usar cualquier string aquí
+        console.log('[index.ts] initializeApp para emulador llamado.');
+    } else {
+        // Si no usamos emulador (ej: en GCP), usar inicialización estándar
+        // Esto funcionará si las credenciales por defecto están configuradas (ej: cuenta de servicio de la función)
+        console.log('[index.ts] No detectado FIRESTORE_EMULATOR_HOST, llamando a initializeApp() estándar...');
+        admin.initializeApp();
+        console.log('[index.ts] initializeApp estándar llamado.');
+    }
 } catch (e: unknown) {
     // Evitar reinicialización en entornos de emulador o pruebas
     if ((e as { code?: string }).code !== 'app/duplicate-app') {

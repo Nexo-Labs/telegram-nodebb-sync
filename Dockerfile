@@ -1,33 +1,43 @@
-# Dockerfile para ejecutar la lógica de sincronización Telegram -> NodeBB
+# Dockerfile Multi-Etapa para construir y ejecutar la sincronización
 
-# ---- Base Stage ----
-# Usar una imagen base de Node.js v18 (Alpine para tamaño reducido)
-FROM node:18-alpine AS base
+# ---- Etapa 1: Builder ----
+# Esta etapa instala TODAS las dependencias (incluyendo dev) y compila el TS
+FROM node:18-alpine AS builder
 WORKDIR /app
 
-# ---- Dependencies Stage ----
-# Copiar archivos de definición de paquetes
-FROM base AS dependencies
+# Copiar archivos de definición de paquetes de la carpeta 'functions'
+COPY functions/package.json functions/package-lock.json ./functions/
+
+# Instalar TODAS las dependencias (incluyendo typescript para la compilación)
+# Ejecutar dentro de la subcarpeta 'functions'
+RUN cd functions && npm ci
+
+# Copiar el código fuente de TypeScript y el archivo de configuración de TS
+COPY functions/src ./functions/src
+COPY functions/tsconfig.json ./functions/tsconfig.json
+
+# Compilar TypeScript a JavaScript (genera la carpeta ./functions/lib)
+RUN cd functions && npm run build
+
+# ---- Etapa 2: Runner ----
+# Esta etapa final toma solo lo necesario para ejecutar la aplicación
+FROM node:18-alpine
+WORKDIR /app
+
+# Copiar solo los archivos de paquetes necesarios para instalar dependencias de producción
 COPY functions/package.json functions/package-lock.json ./
-# Instalar SOLO dependencias de producción usando el lockfile
-RUN npm ci --only=production
 
-# ---- Build Stage (si tuvieras un paso de build de frontend, iría aquí) ----
-# En nuestro caso, la compilación TS -> JS se hace fuera (o en predeploy)
-# Así que este stage no es estrictamente necesario, pero lo mantenemos por estructura
+# Instalar SOLO dependencias de producción
+# Usamos --omit=dev (equivalente a --only=production en npm v7+)
+RUN npm ci --omit=dev --ignore-scripts
 
-# ---- Runner Stage ----
-# Copiar dependencias y código compilado desde stages anteriores
-FROM base AS runner
-COPY --from=dependencies /app/node_modules ./node_modules
-# Copiar el código compilado desde la carpeta 'lib' generada por tsc
-COPY functions/lib ./lib
+# Copiar el código JavaScript compilado desde la etapa 'builder'
+COPY --from=builder /app/functions/lib ./lib
 
-# Crear un usuario no privilegiado para ejecutar la aplicación
+# Crear un usuario no privilegiado
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 
-# Comando por defecto al iniciar el contenedor.
-# Ejecuta el script principal de la lógica de sincronización.
-# Este script debería manejar su propio ciclo de vida (ejecutar y terminar).
-CMD ["node", "lib/index.js"] 
+# Comando por defecto para mantener el contenedor corriendo para docker-compose run/exec
+# (Mantenemos el de docker-compose.yaml, CMD aquí podría ser redundante pero no daña)
+CMD ["tail", "-f", "/dev/null"] 

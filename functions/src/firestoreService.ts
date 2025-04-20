@@ -43,6 +43,8 @@ export interface MarkAsProcessedInput {
 
 // Obtener instancia de Firestore (asumiendo que admin.initializeApp() ya se llamó en index.ts)
 let db: admin.firestore.Firestore;
+
+console.log('[firestoreService.ts] Intentando obtener instancia de Firestore via admin.firestore()...');
 try {
     // No necesitamos llamar a initializeApp() aquí si ya se hizo en index.ts
     db = admin.firestore();

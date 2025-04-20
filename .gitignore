@@ -3,3 +3,5 @@ node_modules
 
 # Archivo de variables de entorno locales para Docker Compose
 .env.local
+
+lib/

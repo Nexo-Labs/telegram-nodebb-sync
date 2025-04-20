@@ -12,14 +12,33 @@ services:
     # Asegúrate de que .env.local exista en la misma carpeta que docker-compose.yaml
     env_file:
       - .env.local
-    # Comando por defecto que se ejecutará al iniciar el contenedor.
-    # Como no es un servidor, sino un script, podemos dejarlo vacío
-    # o especificar un comando que no haga nada (como 'tail -f /dev/null')
-    # si quisiéramos mantener el contenedor corriendo.
-    # Para ejecutar la función, usaremos 'docker-compose run telegram-sync'.
-    command: ["tail", "-f", "/dev/null"] # Mantiene el contenedor corriendo para 'exec'
+    # Añadir variable de entorno para apuntar al emulador de Firestore
+    environment:
+      - FIRESTORE_EMULATOR_HOST=firestore-emulator:8080
+    # Depende del servicio del emulador para asegurar que arranque primero
+    depends_on:
+      - firestore-emulator
+    # Comando original mantenido si quieres hacer 'up' y luego 'run'/'exec'
+    command: ["tail", "-f", "/dev/null"]
     # Opcional: Si necesitas acceder a Firestore (real o emulador)
     # Asegúrate de configurar las credenciales o el endpoint del emulador
     # environment:
     #   - FIRESTORE_EMULATOR_HOST=firestore:8080 # Ejemplo si usas emulador en otro servicio
     #   - GOOGLE_APPLICATION_CREDENTIALS=/path/inside/container/to/keyfile.json # Si conectas a GCP real 
+
+  firestore-emulator:
+    # Imagen oficial del emulador de Firestore (versión más reciente)
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    # Comando para iniciar SOLAMENTE el emulador de Firestore
+    # Escuchará en el puerto 8080 dentro de la red de Docker
+    command: gcloud beta emulators firestore start --host-port=0.0.0.0:8080
+    # Opcional: Exponer el puerto fuera de Docker si necesitas acceder desde tu máquina host
+    # ports:
+    #  - "8080:8080"
+    # Opcional: Volumen para persistir datos del emulador (útil para desarrollo)
+    # volumes:
+    #   - firestore_data:/opt/data
+
+# Opcional: Definir volumen para persistencia de datos del emulador
+# volumes:
+#   firestore_data: 
